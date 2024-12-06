@@ -114,7 +114,7 @@ def create_gui():
     scroll.pack(side="right", fill="y")
 
     # Listbox for displaying track names
-    listbox = Listbox(root, height=15, width=70, selectmode="single")
+    listbox = Listbox(root, height=15, width=110, selectmode="single")
     listbox.pack(padx=10, pady=10)
 
     scroll.config(command=listbox.yview)
