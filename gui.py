@@ -1,10 +1,8 @@
-# gui.py
-
 import os
 import csv
 import threading
 from tkinter import Tk, filedialog, Text, Button, Scrollbar, messagebox, ttk
-from audio_analyzer import AudioAnalyzer
+from audio_analyzer import AudioAnalyzer, AudioFeatures
 from audio_mixer import AudioMixer
 
 
@@ -20,65 +18,80 @@ class MusicDJApp:
         self.progress = None
         self.playlist = None
         self.analysis_results = []  # Store results for exporting
+        self.analyzer = AudioAnalyzer()  # Create analyzer instance
         self.create_gui()
 
     def create_gui(self):
-        scroll = Scrollbar(self.root)
+        # Create main frame
+        main_frame = ttk.Frame(self.root)
+        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # Add scrollbar
+        scroll = Scrollbar(main_frame)
         scroll.pack(side="right", fill="y")
 
-        self.text_area = Text(self.root, height=20, width=80)
-        self.text_area.pack(padx=10, pady=10)
+        # Create text area with improved styling
+        self.text_area = Text(main_frame, height=20, width=80, font=("Courier", 10))
+        self.text_area.pack(side="left", fill="both", expand=True)
 
         scroll.config(command=self.text_area.yview)
         self.text_area.config(yscrollcommand=scroll.set)
 
-        self.progress = ttk.Progressbar(self.root, orient="horizontal", length=400, mode="determinate")
+        # Create control frame
+        control_frame = ttk.Frame(self.root)
+        control_frame.pack(fill="x", padx=10, pady=5)
+
+        # Add progress bar
+        self.progress = ttk.Progressbar(
+            control_frame,
+            orient="horizontal",
+            length=400,
+            mode="determinate"
+        )
         self.progress.pack(pady=10)
 
-        analyze_button = Button(
-            self.root,
+        # Create buttons with improved styling
+        button_style = {"width": 25, "height": 2}
+
+        analyze_button = ttk.Button(
+            control_frame,
             text="Import Playlist & Analyze",
-            width=25,
-            height=2,
-            command=self.start_analysis_thread
+            command=self.start_analysis_thread,
+            width=25
         )
-        analyze_button.pack(pady=10)
+        analyze_button.pack(pady=5)
 
-        play_button = Button(
-            self.root,
+        play_button = ttk.Button(
+            control_frame,
             text="Play First Track",
-            width=25,
-            height=2,
-            command=self.play_first_track
+            command=self.play_first_track,
+            width=25
         )
-        play_button.pack(pady=10)
+        play_button.pack(pady=5)
 
-        stop_button = Button(
-            self.root,
+        stop_button = ttk.Button(
+            control_frame,
             text="Stop Audio",
-            width=25,
-            height=2,
-            command=AudioMixer.stop_audio
+            command=AudioMixer.stop_audio,
+            width=25
         )
-        stop_button.pack(pady=10)
+        stop_button.pack(pady=5)
 
-        export_txt_button = Button(
-            self.root,
+        export_txt_button = ttk.Button(
+            control_frame,
             text="Export Analysis (Text)",
-            width=25,
-            height=2,
-            command=self.export_analysis_to_text
+            command=self.export_analysis_to_text,
+            width=25
         )
-        export_txt_button.pack(pady=10)
+        export_txt_button.pack(pady=5)
 
-        export_csv_button = Button(
-            self.root,
+        export_csv_button = ttk.Button(
+            control_frame,
             text="Export Analysis (CSV)",
-            width=25,
-            height=2,
-            command=self.export_analysis_to_csv
+            command=self.export_analysis_to_csv,
+            width=25
         )
-        export_csv_button.pack(pady=10)
+        export_csv_button.pack(pady=5)
 
     def import_playlist(self):
         """Imports a playlist folder and returns the list of MP3 files."""
@@ -103,27 +116,45 @@ class MusicDJApp:
 
         for i, file in enumerate(mp3_files):
             file_path = os.path.join(folder_path, file)
-            result = AudioAnalyzer.analyze_audio(file_path)
+            features = self.analyzer.analyze_audio(file_path)
 
-            if result is not None:
+            if features is not None:
                 try:
-                    tempo, key, camelot = result
+                    # Parse artist and title from filename
                     artist_title = file.split(' - ')
                     if len(artist_title) == 2:
                         artist, title = artist_title
                     else:
                         artist, title = 'Unknown', 'Unknown'
 
-                    result_line = f"Analyzing file: {file_path}\n"
-                    result_line += f"Artist: {artist}\n"
-                    result_line += f"Title: {title}\n"
-                    result_line += f"BPM: {tempo}\n"
-                    result_line += f"Key: {key}\n\n"
-                except Exception as e:
-                    result_line = f"Error analyzing file {file_path}: {e}\n"
+                    # Format the analysis results
+                    result_line = f"""
+{'=' * 50}
+File: {file}
+Artist: {artist}
+Title: {title}
+BPM: {features.tempo:.1f}
+Key: {features.key}
+Energy Level: {features.energy:.2f}
+Number of Segments: {features.segments['count']}
+{'=' * 50}
+"""
+                    self.text_area.insert("end", result_line)
 
-                self.text_area.insert("end", result_line)
-                self.analysis_results.append({"File": file, "BPM": float(tempo), "Key": key})
+                    # Store comprehensive analysis results
+                    self.analysis_results.append({
+                        "File": file,
+                        "Artist": artist,
+                        "Title": title,
+                        "BPM": float(features.tempo),
+                        "Key": features.key,
+                        "Energy": float(features.energy),
+                        "Segments": features.segments['count']
+                    })
+
+                except Exception as e:
+                    result_line = f"Error analyzing file {file_path}: {str(e)}\n\n"
+                    self.text_area.insert("end", result_line)
             else:
                 result_line = f"Error processing file: {file}\n\n"
                 self.text_area.insert("end", result_line)
@@ -132,6 +163,7 @@ class MusicDJApp:
             self.root.update_idletasks()
 
     def start_analysis_thread(self):
+        """Starts the analysis in a separate thread."""
         folder_path, mp3_files = self.import_playlist()
         if folder_path and mp3_files:
             threading.Thread(target=self.analyze_playlist, args=(folder_path, mp3_files), daemon=True).start()
@@ -145,8 +177,10 @@ class MusicDJApp:
 
     def export_analysis_to_text(self):
         """Exports the analysis results to a text file."""
-        file_path = filedialog.asksaveasfilename(defaultextension=".txt",
-                                                 filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+        )
         if file_path:
             with open(file_path, "w") as f:
                 f.write(self.text_area.get(1.0, "end"))
@@ -158,11 +192,13 @@ class MusicDJApp:
             messagebox.showerror("Error", "No analysis results to export.")
             return
 
-        file_path = filedialog.asksaveasfilename(defaultextension=".csv",
-                                                 filetypes=[("CSV files", "*.csv"), ("All files", "*.*")])
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+        )
         if file_path:
             with open(file_path, "w", newline="") as csvfile:
-                fieldnames = ["File", "BPM", "Key"]
+                fieldnames = ["File", "Artist", "Title", "BPM", "Key", "Energy", "Segments"]
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writeheader()
                 writer.writerows(self.analysis_results)
