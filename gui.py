@@ -50,7 +50,6 @@ class MusicDJApp:
         )
         self.progress.pack(pady=10)
 
-        # Create buttons with improved styling
         button_style = {"width": 25, "height": 2}
 
         analyze_button = ttk.Button(

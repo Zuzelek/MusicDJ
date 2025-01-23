@@ -1,0 +1,21 @@
+You can use pipreqs to automatically generate a requirements.txt file based on the import statements that the Python script(s) contain. To use pipreqs, assuming that you are in the directory where example.py is located:
+
+pip install pipreqs
+pipreqs .
+It will generate the following requirements.txt file:
+
+requests==2.23.0
+beautifulsoup4==4.9.1
+which you can install with:
+
+pip install -r requirements.txt
+
+------------
+
+Notes, whats the task of a DJ?
+
+Break this down into functions.
+
+Reducing high frequencies, low
+
+slowing down tempo, speeding u tempo.
