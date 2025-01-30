@@ -2,6 +2,7 @@ import librosa
 import numpy as np
 from dataclasses import dataclass
 from typing import Tuple, Optional, Dict
+from scipy.stats import pearsonr
 
 
 @dataclass
@@ -21,6 +22,9 @@ class AudioAnalyzer:
     def __init__(self):
         self.sr = 44100  # Standard sample rate
         self.KEY_MAPPING = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+        # Key profiles based on Krumhansl-Schmuckler key-finding algorithm
+        self.major_template = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
+        self.minor_template = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
 
     def analyze_audio(self, file_path: str) -> Optional[AudioFeatures]:
         """Analyzes the audio file and returns comprehensive features."""
@@ -56,22 +60,45 @@ class AudioAnalyzer:
         return tempo, beats
 
     def get_key(self, y: np.ndarray, sr: int) -> str:
+        """Detects key and distinguishes between major and minor."""
         # Extract harmonic signal
         y_harmonic = librosa.effects.harmonic(y)
-        chroma = librosa.feature.chroma_cqt(y=y_harmonic, sr=sr)
 
-        # Smooth chroma values
+        # Compute chroma features
+        chroma = librosa.feature.chroma_cqt(y=y_harmonic, sr=sr, n_chroma=12, n_octaves=7)
+
+        # Average chroma features over time
         chroma_mean = np.mean(chroma, axis=1)
+        chroma_mean = chroma_mean / np.linalg.norm(chroma_mean)  # Normalize
 
-        # Get the key index
-        key_idx = np.argmax(chroma_mean)
-        return self.KEY_MAPPING[key_idx]
+        best_score = -np.inf
+        detected_key = ""
+
+        # Iteraing over possible keys (C to B)
+        for i, base_key in enumerate(self.KEY_MAPPING):
+
+            major_profile = np.roll(self.major_template, i)
+            minor_profile = np.roll(self.minor_template, i)
+
+            # Compute similarity
+            major_similarity = pearsonr(chroma_mean, major_profile)[0]
+            minor_similarity = pearsonr(chroma_mean, minor_profile)[0]
+
+            # Compare the results and select the best
+            if major_similarity > best_score:
+                best_score = major_similarity
+                detected_key = f"{base_key} Major"
+            if minor_similarity > best_score:
+                best_score = minor_similarity
+                detected_key = f"{base_key} Minor"
+
+        return detected_key
 
     def get_song_segments(self, y: np.ndarray, sr: int) -> Dict:
-        # Get onset strength and reduce sensitivity
+        """Detect song segments using onset strength and agglomerative clustering."""
+
         onset_env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=1024)
 
-        # Detect segment boundaries
         boundary_frames = librosa.segment.agglomerative(onset_env, k=8)  # Group into 8 sections
         boundary_times = librosa.frames_to_time(boundary_frames, sr=sr)
 
@@ -84,6 +111,7 @@ class AudioAnalyzer:
         return segments
 
     def get_energy_profile(self, y: np.ndarray) -> float:
+        """Compute the normalized energy profile of the audio."""
         frame_length = 2048
         hop_length = 512
         rms = librosa.feature.rms(y=y, frame_length=frame_length, hop_length=hop_length)
