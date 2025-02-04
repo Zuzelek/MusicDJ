@@ -1,0 +1,9 @@
+numpy
+librosa
+sounddevice
+pandas
+matplotlib
+scikit-learn
+tensorflow
+tkinter
+ttkthemes
