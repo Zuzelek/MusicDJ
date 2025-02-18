@@ -6,12 +6,12 @@ from io import StringIO
 from audio_analyzer import AudioAnalyzer, AudioFeatures
 
 app = Flask(__name__)
-app.secret_key = '1bc4f365f4282600bcc405126d8ca0cf'  # Your Flask secret key
+app.secret_key = '1bc4f365f4282600bcc405126d8ca0cf'
 
 # Spotify API credentials
-CLIENT_ID = "fceaae445db64dfa9879e3f632fb7d33"  # Your Client ID
-CLIENT_SECRET = "821f091dec784c2ebef15865e206fb20"  # Your Client Secret
-REDIRECT_URI = "http://localhost:8080/callback"  # Must match Spotify Dashboard
+CLIENT_ID = ""  #
+CLIENT_SECRET = ""
+REDIRECT_URI = "http://localhost:8080/callback"
 
 # Spotify OAuth setup
 sp_oauth = SpotifyOAuth(
@@ -42,10 +42,10 @@ def callback():
 
     print(f"Received code from Spotify: {code}")  # Debugging
     token_info = sp_oauth.get_access_token(code, as_dict=False)
-    if isinstance(token_info, str):  # Handle direct token string
+    if isinstance(token_info, str):
         access_token = token_info
         refresh_token = None
-    else:  # Handle dictionary response
+    else:
         access_token = token_info['access_token']
         refresh_token = token_info.get('refresh_token')
 
@@ -53,7 +53,7 @@ def callback():
     session['access_token'] = access_token
     session['refresh_token'] = refresh_token
 
-    print("Login successful, redirecting to home")  # Debugging
+    print("Login successful, redirecting to home")
     return redirect('/')
 
 @app.route('/playlists')
@@ -87,7 +87,7 @@ def playlist_songs(playlist_id):
 
         for item in tracks['items']:
             track = item['track']
-            if not track:  # Skip if track is None
+            if not track:
                 continue
 
             # Fetch audio features for the track
