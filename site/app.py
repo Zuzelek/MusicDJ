@@ -3,7 +3,7 @@ import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 import csv
 from io import StringIO
-from audio_analyzer import AudioAnalyzer, AudioFeatures
+from audio_analyzer import AudioAnalyzer
 
 app = Flask(__name__)
 app.secret_key = '1bc4f365f4282600bcc405126d8ca0cf'

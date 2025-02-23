@@ -1,11 +1,11 @@
-import os
 import csv
+import os
 import threading
 from datetime import time
-from tkinter import Tk, filedialog, Text, Button, Scrollbar, messagebox, ttk, Scale
+from tkinter import filedialog, Scrollbar, messagebox, ttk, Scale
 from tkinterdnd2 import TkinterDnD, DND_FILES
-from audio_analyzer import AudioAnalyzer, AudioFeatures
-from audio_mixer import AudioMixer
+from audioProcessing.audio_analyzer import AudioAnalyzer
+from audioProcessing.audio_mixer import AudioMixer
 
 
 class MusicDJApp:
@@ -18,7 +18,6 @@ class MusicDJApp:
 
         self.playlist_tree = None
         self.progress = None
-        self.playlist = None
         self.analysis_results = []
         self.analyzer = AudioAnalyzer()
         self.current_track_index = 0
@@ -26,35 +25,27 @@ class MusicDJApp:
         self.create_gui()
 
     def create_gui(self):
-        # Main frame
+        """Create GUI components."""
         main_frame = ttk.Frame(self.root)
         main_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # Playlist display (Treeview)
         self.playlist_tree = ttk.Treeview(main_frame, columns=("File", "Artist", "Title", "BPM", "Key", "Energy"),
                                           show="headings")
-        self.playlist_tree.heading("File", text="File")
-        self.playlist_tree.heading("Artist", text="Artist")
-        self.playlist_tree.heading("Title", text="Title")
-        self.playlist_tree.heading("BPM", text="BPM")
-        self.playlist_tree.heading("Key", text="Key")
-        self.playlist_tree.heading("Energy", text="Energy")
+        for col in ["File", "Artist", "Title", "BPM", "Key", "Energy"]:
+            self.playlist_tree.heading(col, text=col)
+
         self.playlist_tree.pack(fill="both", expand=True, pady=10)
 
-        # Scrollbar for playlist
         scroll = Scrollbar(main_frame, orient="vertical", command=self.playlist_tree.yview)
         scroll.pack(side="right", fill="y")
         self.playlist_tree.configure(yscrollcommand=scroll.set)
 
-        # Control frame
         control_frame = ttk.Frame(self.root)
         control_frame.pack(fill="x", padx=10, pady=5)
 
-        # Progress bar
         self.progress = ttk.Progressbar(control_frame, orient="horizontal", length=400, mode="determinate")
         self.progress.pack(pady=10)
 
-        # Volume control
         volume_label = ttk.Label(control_frame, text="Volume:")
         volume_label.pack(side="left", padx=5)
         self.volume_slider = Scale(control_frame, from_=0.0, to=1.0, resolution=0.1, orient="horizontal",
@@ -62,20 +53,11 @@ class MusicDJApp:
         self.volume_slider.set(1.0)
         self.volume_slider.pack(side="left", padx=5)
 
-        # Skip slider
-        skip_label = ttk.Label(control_frame, text="Skip (s):")
-        skip_label.pack(side="left", padx=5)
-        self.skip_slider = Scale(control_frame, from_=0, to=600, resolution=1, orient="horizontal",
-                                 command=self.skip_track)
-        self.skip_slider.pack(side="left", padx=5)
-
-        # Buttons
         buttons = [
             ("Import Playlist & Analyze", self.start_analysis_thread),
             ("Play Selected Track", self.play_selected_track),
             ("Play All Tracks", self.play_all_tracks),
             ("Stop Audio", self.stop_audio),
-            ("Clear Playlist", self.clear_playlist),
             ("Export Analysis (Text)", self.export_analysis_to_text),
             ("Export Analysis (CSV)", self.export_analysis_to_csv),
         ]
@@ -84,17 +66,16 @@ class MusicDJApp:
             button = ttk.Button(control_frame, text=text, command=command, width=25)
             button.pack(side="left", padx=5, pady=5)
 
-        # Drag-and-drop support
         self.root.drop_target_register(DND_FILES)
         self.root.dnd_bind('<<Drop>>', self.handle_drop)
 
     def handle_drop(self, event):
-        """Handle drag-and-drop events"""
+        """Handle drag-and-drop events."""
         folder_path = event.data.strip('{}')
         if os.path.isdir(folder_path):
             self.start_analysis_thread(folder_path)
         else:
-            messagebox.showerror("Error", "Please drop a folder containing MP3 files.")
+            messagebox.showerror("Error", "Please drop a valid folder.")
 
     def import_playlist(self, folder_path=None):
         if not folder_path:
@@ -104,14 +85,12 @@ class MusicDJApp:
             if mp3_files:
                 return folder_path, mp3_files
             else:
-                messagebox.showerror("Error", "No MP3 files found in the selected folder.")
-                return None, None
-        else:
-            messagebox.showerror("Error", "No folder selected.")
-            return None, None
+                messagebox.showerror("Error", "No MP3 files found.")
+        return None, None
 
     def analyze_playlist(self, folder_path, mp3_files):
-        self.playlist_tree.delete(*self.playlist_tree.get_children())  # Clear previous entries
+        """Analyzes audio files and updates the GUI."""
+        self.playlist_tree.delete(*self.playlist_tree.get_children())
         self.analysis_results = []
         self.progress["maximum"] = len(mp3_files)
         self.progress["value"] = 0
@@ -122,32 +101,15 @@ class MusicDJApp:
             file_path = os.path.join(folder_path, file)
             features = self.analyzer.analyze_audio(file_path)
 
-            if features is not None:
-                try:
-                    artist_title = file.split(' - ')
-                    if len(artist_title) == 2:
-                        artist, title = artist_title
-                    else:
-                        artist, title = 'Unknown', 'Unknown'
-
-                    self.playlist_tree.insert("", "end", values=(
-                        file, artist, title, f"{features.tempo:.1f}", features.key, f"{features.energy:.2f}"
-                    ))
-
-                    self.analysis_results.append({
-                        "File": file,
-                        "Artist": artist,
-                        "Title": title,
-                        "BPM": float(features.tempo),
-                        "Key": features.key,
-                        "Energy": float(features.energy),
-                        "Segments": features.segments['count']
-                    })
-
-                except Exception as e:
-                    print(f"Error analyzing file {file_path}: {e}")
-            else:
-                print(f"Error processing file: {file}")
+            if features:
+                artist, title = file.split(' - ') if ' - ' in file else ('Unknown', 'Unknown')
+                self.playlist_tree.insert("", "end", values=(file, artist, title, f"{features.tempo:.1f}",
+                                                              features.key, f"{features.energy:.2f}"))
+                self.analysis_results.append({
+                    "File": file, "Artist": artist, "Title": title,
+                    "BPM": features.tempo, "Key": features.key, "Energy": features.energy,
+                    "Segments": features.segments['count']
+                })
 
             self.progress["value"] += 1
             self.root.update_idletasks()
@@ -194,13 +156,6 @@ class MusicDJApp:
 
     def skip_track(self, position):
         AudioMixer.skip_to_position(float(position))
-
-    def clear_playlist(self):
-        self.playlist_tree.delete(*self.playlist_tree.get_children())
-        self.analysis_results = []
-        self.progress["value"] = 0
-        self.playlist_folder = None  # Reset the playlist folder
-        messagebox.showinfo("Info", "Playlist and analysis results cleared.")
 
     def export_analysis_to_text(self):
         file_path = filedialog.asksaveasfilename(defaultextension=".txt",
