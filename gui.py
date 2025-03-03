@@ -277,7 +277,7 @@ class MusicDJApp:
 
         if not track_sections:
             messagebox.showerror("Error", "No section data available for this track.")
-            messagebox.showinfo("Tip", "Run the section_analyzer.py script first to analyze tracks.")
+            messagebox.showinfo("Tip", "Run the beat_detection.py script first to analyze tracks.")
             return
 
         # Construct the full path to the selected track
@@ -412,7 +412,7 @@ class MusicDJApp:
 
         try:
             import subprocess
-            cmd = ["python", "section_analyzer.py", self.playlist_folder, "--output", "results.json"]
+            cmd = ["python", "beat_detection.py", self.playlist_folder, "--output", "results.json"]
 
             progress_dialog = Toplevel(self.root)
             progress_dialog.title("Running Section Analyzer")

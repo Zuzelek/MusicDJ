@@ -6,23 +6,7 @@ import os
 
 
 def detect_drops(audio_path, plot=True, save_plot=None):
-    """
-    Specialized EDM drop detector
 
-    Parameters:
-    -----------
-    audio_path : str
-        Path to the audio file
-    plot : bool
-        Whether to generate a visualization
-    save_plot : str or None
-        Path to save the visualization
-
-    Returns:
-    --------
-    drops : list
-        List of dictionaries with drop timestamps and confidence scores
-    """
     print(f"Analyzing drops in: {os.path.basename(audio_path)}")
 
     # Load audio with higher sample rate for better frequency resolution
