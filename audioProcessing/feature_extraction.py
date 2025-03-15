@@ -9,45 +9,20 @@ from librosa.feature import mfcc, chroma_stft, spectral_contrast
 from librosa.onset import onset_strength
 from librosa.effects import harmonic, percussive
 
-# Ignore specific warnings
+
 warnings.filterwarnings('ignore', category=UserWarning)
 
 
 class FeatureExtractor:
-    """
-    A comprehensive feature extraction pipeline for EDM tracks to support AI DJ mixing.
-    """
+
 
     def __init__(self, sample_rate=22050, hop_length=512):
-        """
-        Initialize the feature extractor.
 
-        Parameters:
-        -----------
-        sample_rate : int
-            Sample rate for audio analysis
-        hop_length : int
-            Hop length for FFT-based features
-        """
         self.sr = sample_rate
         self.hop_length = hop_length
 
     def extract_all_features(self, audio_path, output_folder=None):
-        """
-        Extract a comprehensive set of features from an audio file.
 
-        Parameters:
-        -----------
-        audio_path : str
-            Path to the audio file
-        output_folder : str, optional
-            If provided, saves features to JSON file in this folder
-
-        Returns:
-        --------
-        features : dict
-            Dictionary containing all extracted features
-        """
         print(f"Extracting features from {os.path.basename(audio_path)}")
 
         # Load audio file
@@ -290,6 +265,19 @@ class FeatureExtractor:
             'brightness': float(brightness)
         }
 
+    def fix_division_by_zero(self, array, divisor, fallback=None):
+        if fallback is None:
+            fallback = np.zeros_like(array)
+
+        result = np.zeros_like(array)
+        valid_indices = divisor > 0
+
+        result[valid_indices] = array[valid_indices] / divisor[valid_indices]
+
+        result[~valid_indices] = fallback[~valid_indices] if isinstance(fallback, np.ndarray) else fallback
+
+        return result
+
     def extract_energy_features(self, y, sr):
         """Extract energy-related features for track intensity analysis."""
         # Compute RMS energy
@@ -318,9 +306,9 @@ class FeatureExtractor:
 
         # Normalize energies
         total_energy = low_energy + mid_energy + high_energy
-        low_energy_ratio = low_energy / total_energy if np.sum(total_energy) > 0 else np.zeros_like(low_energy)
-        mid_energy_ratio = mid_energy / total_energy if np.sum(total_energy) > 0 else np.zeros_like(mid_energy)
-        high_energy_ratio = high_energy / total_energy if np.sum(total_energy) > 0 else np.zeros_like(high_energy)
+        low_energy_ratio = self.fix_division_by_zero(low_energy, total_energy)
+        mid_energy_ratio = self.fix_division_by_zero(mid_energy, total_energy)
+        high_energy_ratio = self.fix_division_by_zero(high_energy, total_energy)
 
         # Calculate dynamic range
         energy_db = librosa.power_to_db(energy, ref=np.max)
