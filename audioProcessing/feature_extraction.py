@@ -25,7 +25,6 @@ class FeatureExtractor:
 
         print(f"Extracting features from {os.path.basename(audio_path)}")
 
-        # Load audio file
         try:
             y, sr = librosa.load(audio_path, sr=self.sr)
         except Exception as e:
@@ -79,8 +78,6 @@ class FeatureExtractor:
         return all_features
 
     def extract_rhythmic_features(self, y, sr):
-        """Extract rhythmic features including tempo, beat positions, and rhythm patterns."""
-        # Extract onset envelope
         onset_env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=self.hop_length)
 
         # Tempo and beat information
@@ -108,24 +105,21 @@ class FeatureExtractor:
                 'kurtosis': 0
             }
 
-        # Extract percussive component for rhythm analysis
         y_perc = percussive(y)
 
         # Calculate pulse clarity (strength of beats)
         onset_env_perc = librosa.onset.onset_strength(y=y_perc, sr=sr)
         pulse_clarity = np.mean(onset_env_perc) / np.max(onset_env_perc) if np.max(onset_env_perc) > 0 else 0
 
-        # Calculate rhythmic patterns using a tempogram
         tempogram = librosa.feature.tempogram(onset_envelope=onset_env, sr=sr, hop_length=self.hop_length)
 
-        # Calculate rhythmic centroid as indicator of rhythmic complexity
         if tempogram.size > 0:
             rhythm_centroid = np.sum(tempogram * np.arange(tempogram.shape[0]).reshape(-1, 1)) / np.sum(tempogram)
             rhythm_centroid = float(np.mean(rhythm_centroid))
         else:
             rhythm_centroid = 0
 
-        # Calculate tempo range for BPM sliding
+        # Calculate tempo range for BPM ramping
         if 0.5 * tempo >= 85 and 2 * tempo <= 175:
             tempo_half = 0.5 * tempo
             tempo_double = 2 * tempo
@@ -143,69 +137,7 @@ class FeatureExtractor:
             'rhythm_complexity': float(rhythm_centroid)
         }
 
-    def extract_tonal_features(self, y, sr):
-        """Extract tonal features including key and harmonic content."""
-        # Extract harmonic component
-        y_harm = harmonic(y)
-
-        # Compute chromagram
-        chroma = librosa.feature.chroma_cqt(y=y_harm, sr=sr)
-
-        # Estimate key using chroma
-        chroma_avg = np.mean(chroma, axis=1)
-        key_index = np.argmax(chroma_avg)
-
-        # Map key index to musical key
-        note_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-        key_note = note_names[key_index]
-
-        # Estimate mode (major/minor)
-        # Using the method described in Lartillot's implementation
-        major_profile = np.array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1]) / 7.0
-        minor_profile = np.array([1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0]) / 7.0
-
-        # Rotate profiles to match current key
-        maj_corr = np.corrcoef(chroma_avg, np.roll(major_profile, key_index))[0, 1]
-        min_corr = np.corrcoef(chroma_avg, np.roll(minor_profile, key_index))[0, 1]
-
-        mode = 'major' if maj_corr >= min_corr else 'minor'
-        key = f"{key_note} {mode}"
-
-        # Key certainty (correlation with best matching profile)
-        key_certainty = max(maj_corr, min_corr)
-
-        # Calculate key strength for all keys
-        key_strengths = {}
-        for i, note in enumerate(note_names):
-            maj_prof = np.roll(major_profile, i)
-            min_prof = np.roll(minor_profile, i)
-
-            maj_strength = np.corrcoef(chroma_avg, maj_prof)[0, 1]
-            min_strength = np.corrcoef(chroma_avg, min_prof)[0, 1]
-
-            key_strengths[f"{note} major"] = float(maj_strength)
-            key_strengths[f"{note} minor"] = float(min_strength)
-
-        # Calculate tonal centroid as a measure of harmonic complexity
-        tonal_centroid = librosa.feature.tonnetz(y=y_harm, sr=sr)
-        tonal_complexity = float(np.mean(np.std(tonal_centroid, axis=1)))
-
-        # Harmonic change detection function
-        hcdf = np.sqrt(np.sum(np.diff(chroma, axis=1) ** 2, axis=0))
-        harmonic_change_rate = float(np.mean(hcdf))
-
-        return {
-            'key': key,
-            'key_certainty': float(key_certainty),
-            'key_strengths': key_strengths,
-            'harmonic_complexity': float(tonal_complexity),
-            'harmonic_change_rate': float(harmonic_change_rate),
-            'average_chroma': chroma_avg.tolist()
-        }
-
     def extract_spectral_features(self, y, sr):
-        """Extract spectral features describing timbre and frequency characteristics."""
-        # Compute STFT
         S = np.abs(librosa.stft(y, hop_length=self.hop_length))
 
         # Compute spectral centroid
@@ -293,11 +225,10 @@ class FeatureExtractor:
         n_fft = 2 * (S.shape[0] - 1)
         freqs = librosa.fft_frequencies(sr=sr, n_fft=n_fft)
 
-        # Low: 20-250 Hz (sub-bass and bass)
         low_band = np.where((freqs >= 20) & (freqs <= 250))[0]
-        # Mid: 250-4000 Hz (mid-range)
+
         mid_band = np.where((freqs > 250) & (freqs <= 4000))[0]
-        # High: 4000-20000 Hz (high-end)
+
         high_band = np.where((freqs > 4000) & (freqs <= 20000))[0]
 
         low_energy = np.sum(S[low_band, :], axis=0) if len(low_band) > 0 else np.zeros_like(energy)
@@ -323,7 +254,6 @@ class FeatureExtractor:
                                               pre_avg=10, post_avg=10, delta=0.2, wait=20)
         peak_times = librosa.frames_to_time(energy_peaks, sr=sr, hop_length=self.hop_length)
 
-        # Calculate energy dynamics
         energy_mean = np.mean(energy)
         energy_std = np.std(energy)
         energy_skew = float(skew(energy)) if len(energy) > 2 else 0
@@ -362,10 +292,9 @@ class FeatureExtractor:
 
     def extract_structural_features(self, y, sr):
         """Extract features related to track structure and segmentation."""
-        # Compute MFCC features for segmentation
+        # Compute MFCC features for segmentation (
         mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, hop_length=self.hop_length)
 
-        # Compute chroma features for harmonic content
         chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=self.hop_length)
 
         # Combine features for segmentation
@@ -400,7 +329,6 @@ class FeatureExtractor:
                     segment_var = np.mean(np.var(segment_features, axis=1))
                     segment_homogeneity.append(float(1.0 / (1.0 + segment_var)))
 
-        # Estimate repetitive structure
         if S.shape[0] > 0:
             repetitiveness = float(np.mean(S))
         else:
@@ -414,114 +342,139 @@ class FeatureExtractor:
         }
 
 
-def compare_tracks(track1_features, track2_features):
-    """
-    Compare two tracks for mixing compatibility.
+    def extract_tonal_features(self, y, sr):
+        y_harm = harmonic(y)
 
-    Parameters:
-    -----------
-    track1_features : dict
-        Features of the first track
-    track2_features : dict
-        Features of the second track
+        # Compute chromagram
+        chroma = librosa.feature.chroma_cqt(y=y_harm, sr=sr)
 
-    Returns:
-    --------
-    compatibility : dict
-        Dictionary of compatibility scores and mixing recommendations
-    """
-    compatibility = {}
+        # Estimate key using chroma
+        chroma_avg = np.mean(chroma, axis=1)
+        key_index = np.argmax(chroma_avg)
 
-    # Tempo compatibility
-    tempo1 = track1_features['rhythmic']['bpm']
-    tempo2 = track2_features['rhythmic']['bpm']
+        # Map key index to musical key
+        note_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+        key_note = note_names[key_index]
 
-    # Check for tempo doubling/halving relationships
-    tempo_ratios = [
-        abs(tempo1 - tempo2) / max(tempo1, tempo2),
-        abs(tempo1 - 2 * tempo2) / max(tempo1, 2 * tempo2),
-        abs(2 * tempo1 - tempo2) / max(2 * tempo1, tempo2)
-    ]
+        major_profile = np.array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1]) / 7.0
+        minor_profile = np.array([1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0]) / 7.0
 
-    tempo_compatibility = 1.0 - min(tempo_ratios)
+        # Rotate profiles to match current key
+        maj_corr = np.corrcoef(chroma_avg, np.roll(major_profile, key_index))[0, 1]
+        min_corr = np.corrcoef(chroma_avg, np.roll(minor_profile, key_index))[0, 1]
 
-    # Tonal compatibility (key matching)
-    key1 = track1_features['tonal']['key']
-    key2 = track2_features['tonal']['key']
+        mode = 'major' if maj_corr >= min_corr else 'minor'
+        key = f"{key_note} {mode}"
 
-    # Get Camelot key compatibility
-    key_compatibility = calculate_key_compatibility(key1, key2)
+        # Key certainty (correlation with best matching profile)
+        key_certainty = max(maj_corr, min_corr)
 
-    # Energy compatibility
-    energy1 = track1_features['energy']['rms']['mean']
-    energy2 = track2_features['energy']['rms']['mean']
+        # Calculate key strength for all keys
+        key_strengths = {}
+        for i, note in enumerate(note_names):
+            maj_prof = np.roll(major_profile, i)
+            min_prof = np.roll(minor_profile, i)
 
-    energy_ratio = min(energy1, energy2) / max(energy1, energy2)
+            maj_strength = np.corrcoef(chroma_avg, maj_prof)[0, 1]
+            min_strength = np.corrcoef(chroma_avg, min_prof)[0, 1]
 
-    # Spectral compatibility
-    bright1 = track1_features['spectral']['brightness']
-    bright2 = track2_features['spectral']['brightness']
+            key_strengths[f"{note} major"] = float(maj_strength)
+            key_strengths[f"{note} minor"] = float(min_strength)
 
-    brightness_diff = abs(bright1 - bright2)
-    brightness_compatibility = 1.0 - min(brightness_diff, 1.0)
+        # Calculate tonal centroid as a measure of harmonic complexity
+        tonal_centroid = librosa.feature.tonnetz(y=y_harm, sr=sr)
+        tonal_complexity = float(np.mean(np.std(tonal_centroid, axis=1)))
 
-    # Overall compatibility score (weighted sum)
-    overall_compatibility = (
-            0.35 * tempo_compatibility +
-            0.35 * key_compatibility +
-            0.15 * energy_ratio +
-            0.15 * brightness_compatibility
-    )
+        # Harmonic change detection function
+        hcdf = np.sqrt(np.sum(np.diff(chroma, axis=1) ** 2, axis=0))
+        harmonic_change_rate = float(np.mean(hcdf))
 
-    # Calculate recommended crossfade duration based on compatibility
-    if overall_compatibility > 0.8:
-        # Very compatible tracks can have shorter transitions
-        min_crossfade = 4  # seconds
-    elif overall_compatibility > 0.6:
-        # Moderately compatible tracks
-        min_crossfade = 8  # seconds
-    else:
-        # Less compatible tracks need longer crossfades
-        min_crossfade = 16  # seconds
+        return {
+            'key': key,
+            'key_certainty': float(key_certainty),
+            'key_strengths': key_strengths,
+            'harmonic_complexity': float(tonal_complexity),
+            'harmonic_change_rate': float(harmonic_change_rate),
+            'average_chroma': chroma_avg.tolist()
+        }
 
-    # Mixing recommendations
-    if overall_compatibility > 0.7:
-        mix_technique = "Harmonic mixing (blend)"
-    elif tempo_compatibility > 0.9:
-        mix_technique = "Beat matching"
-    else:
-        mix_technique = "Effect transition (echo out/in)"
+    def compare_tracks(track1_features, track2_features):
 
-    compatibility = {
-        'overall_score': float(overall_compatibility),
-        'tempo_compatibility': float(tempo_compatibility),
-        'key_compatibility': float(key_compatibility),
-        'energy_compatibility': float(energy_ratio),
-        'spectral_compatibility': float(brightness_compatibility),
-        'recommended_min_crossfade': float(min_crossfade),
-        'recommended_technique': mix_technique
-    }
+        compatibility = {}
 
-    return compatibility
+        # Tempo compatibility
+        tempo1 = track1_features['rhythmic']['bpm']
+        tempo2 = track2_features['rhythmic']['bpm']
 
+        # checking for tempo doubling
+        tempo_ratios = [
+            abs(tempo1 - tempo2) / max(tempo1, tempo2),
+            abs(tempo1 - 2 * tempo2) / max(tempo1, 2 * tempo2),
+            abs(2 * tempo1 - tempo2) / max(2 * tempo1, tempo2)
+        ]
+
+        tempo_compatibility = 1.0 - min(tempo_ratios)
+
+        # Tonal compatibility (key matching)
+        key1 = track1_features['tonal']['key']
+        key2 = track2_features['tonal']['key']
+
+        # Get Camelot key compatibility
+        key_compatibility = calculate_key_compatibility(key1, key2)
+
+        # Energy compatibility
+        energy1 = track1_features['energy']['rms']['mean']
+        energy2 = track2_features['energy']['rms']['mean']
+
+        energy_ratio = min(energy1, energy2) / max(energy1, energy2)
+
+        # Spectral compatibility
+        bright1 = track1_features['spectral']['brightness']
+        bright2 = track2_features['spectral']['brightness']
+
+        brightness_diff = abs(bright1 - bright2)
+        brightness_compatibility = 1.0 - min(brightness_diff, 1.0)
+
+        # Overall compatibility score (weighted sum)
+        overall_compatibility = (
+                0.35 * tempo_compatibility +
+                0.35 * key_compatibility +
+                0.15 * energy_ratio +
+                0.15 * brightness_compatibility
+        )
+
+        # recommended crossfade duration based on compatibility
+        if overall_compatibility > 0.8:
+            # compatible tracks will have short crossfade
+            min_crossfade = 4
+        elif overall_compatibility > 0.6:
+            min_crossfade = 8
+        else:
+            # longer crossfade for less compatible tracks
+            min_crossfade = 13
+
+        # Mixing recommendations
+        if overall_compatibility > 0.7:
+            mix_technique = "Harmonic mixing (blend)"
+        elif tempo_compatibility > 0.9:
+            mix_technique = "Beat matching"
+        else:
+            mix_technique = "Effect transition (echo out/in)"
+
+        compatibility = {
+            'overall_score': float(overall_compatibility),
+            'tempo_compatibility': float(tempo_compatibility),
+            'key_compatibility': float(key_compatibility),
+            'energy_compatibility': float(energy_ratio),
+            'spectral_compatibility': float(brightness_compatibility),
+            'recommended_min_crossfade': float(min_crossfade),
+            'recommended_technique': mix_technique
+        }
+
+        return compatibility
 
 def calculate_key_compatibility(key1, key2):
-    """
-    Calculate musical key compatibility using the Camelot wheel (Circle of Fifths).
 
-    Parameters:
-    -----------
-    key1 : str
-        First key (e.g. "C major", "A minor")
-    key2 : str
-        Second key
-
-    Returns:
-    --------
-    compatibility : float
-        Compatibility score between 0 and 1
-    """
-    # Parse keys
     k1_parts = key1.split()
     k2_parts = key2.split()
 
@@ -565,7 +518,6 @@ def calculate_key_compatibility(key1, key2):
 
 
 def key_to_camelot(note, mode):
-    """Convert musical key to Camelot wheel notation."""
     # Camelot notation
     camelot_map = {
         'B': {'major': '1B', 'minor': '10A'},
@@ -593,25 +545,8 @@ def key_to_camelot(note, mode):
         return None
 
 
-# Example usage function
 def extract_and_compare_tracks(track1_path, track2_path, output_folder=None):
-    """
-    Extract features from two tracks and compare their compatibility for mixing.
 
-    Parameters:
-    -----------
-    track1_path : str
-        Path to first audio file
-    track2_path : str
-        Path to second audio file
-    output_folder : str, optional
-        Folder to save feature files
-
-    Returns:
-    --------
-    result : dict
-        Contains features of both tracks and their compatibility analysis
-    """
     extractor = FeatureExtractor()
 
     # Extract features

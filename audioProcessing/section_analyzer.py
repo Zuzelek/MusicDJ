@@ -19,33 +19,29 @@ class SectionAnalyzer:
         self.OUTRO_LENGTH_RATIO = 0.15  # Same for outro
 
     def analyze_sections(self, y, sr):
-        # Get track duration
         duration = librosa.get_duration(y=y, sr=sr)
 
-        # Extract energy curve
         energy_curve = librosa.feature.rms(y=y).flatten()
 
-        # Smooth it for better detection
         energy_curve_smooth = savgol_filter(energy_curve,
                                             int(sr / 512 * 8) if len(energy_curve) > sr / 512 * 8 else 3,
                                             2)
 
-        # Normalize to 0-1 range
         scaler = MinMaxScaler()
         energy_curve_norm = scaler.fit_transform(energy_curve_smooth.reshape(-1, 1)).flatten()
 
         # Time axis for mapping frames to seconds
         time_axis = np.linspace(0, duration, len(energy_curve_norm))
 
-        # Calculate average energy
+        # avg energy
         avg_energy = np.mean(energy_curve_norm)
 
-        # Find drops (high energy sections)
+        # drops (high energy sections)
         drop_threshold = avg_energy * self.DROP_ENERGY_RATIO
         drop_candidates = np.where(energy_curve_norm > drop_threshold)[0]
         drops = self._group_frames_to_sections(drop_candidates, time_axis)
 
-        # Find breakdowns (low energy sections)
+        # breakdowns (low energy sections)
         breakdown_threshold = avg_energy * self.BREAKDOWN_ENERGY_RATIO
         breakdown_candidates = np.where(energy_curve_norm < breakdown_threshold)[0]
         breakdowns = self._group_frames_to_sections(breakdown_candidates, time_axis)
@@ -57,7 +53,7 @@ class SectionAnalyzer:
         # Find buildups (sections before drops)
         buildups = []
         for drop in drops:
-            # Typical buildup length in EDM is ~16 seconds
+            # Typical buildup length in EDM is ~16 seconds but depends on song
             buildup_start = drop['start'] - 16
             buildup_start = max(0, buildup_start)
 
@@ -129,17 +125,14 @@ class SectionAnalyzer:
         # Create figure
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10))
 
-        # If audio is provided, show waveform
         if audio_path:
             y, sr = librosa.load(audio_path, sr=44100)
             librosa.display.waveshow(y, sr=sr, ax=ax1)
             ax1.set_title('Waveform')
         else:
-            # Otherwise just plot energy
             ax1.plot(sections['time_axis'], sections['energy_curve'])
             ax1.set_title('Energy Curve')
 
-        # Plot section markers
         ax2.set_title('Detected Sections')
         ax2.set_xlabel('Time (seconds)')
         ax2.set_ylabel('Section Type')
