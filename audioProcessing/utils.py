@@ -241,7 +241,7 @@ def create_robust_mix(transitions, output_path, min_crossfade=8.0):
         track_name = os.path.basename(transition['track_path'])
         print(f"Processing track {i + 1}/{len(transitions)}: {track_name}")
 
-        # Load current track - fail loudly if this doesn't work
+        # Load current track
         try:
             y_current, sr = librosa.load(transition['track_path'], sr=sr)
         except Exception as e:
@@ -284,16 +284,15 @@ def create_robust_mix(transitions, output_path, min_crossfade=8.0):
                 print(f"  Adding entire track")
                 mix = y_current
 
-            # Store for verification
             last_audio_segment = mix
             last_audio_path = transition['track_path']
         else:
-            # For subsequent tracks, create a transition
+            # For next tracks, create a transition
             prev_transition = transitions[i - 1]
             prev_track_path = prev_transition['track_path']
 
             if prev_transition['exit_point'] is not None:
-                # Verify there is have a valid mix so far
+                # Verify there is a valid mix so far
                 if len(mix) == 0:
                     print("Warning: Mix is empty. Starting with current track.")
                     if transition['exit_point'] is not None:
@@ -302,7 +301,7 @@ def create_robust_mix(transitions, output_path, min_crossfade=8.0):
                         mix = y_current
                     continue
 
-                # Verify our last segment isn't silent
+                # Verify the last segment isn't silent
                 if np.max(np.abs(mix[-sr:])) < 0.01:
                     print("Warning: End of mix is silent. Finding better transition point.")
                     # Find last non-silent section
@@ -310,7 +309,7 @@ def create_robust_mix(transitions, output_path, min_crossfade=8.0):
                         if len(mix) > test_offset * sr:
                             test_segment = mix[-test_offset * sr:]
                             if np.max(np.abs(test_segment)) >= 0.01:
-                                # Trim mix to this point
+                                # Trim mix any silent points in the mix
                                 mix = mix[:-test_offset * sr]
                                 print(f"  Trimmed {test_offset}s of silence from end of mix")
                                 break
@@ -333,7 +332,7 @@ def create_robust_mix(transitions, output_path, min_crossfade=8.0):
                 # Check for vocal information
                 has_vocal_info = 'vocal_segments' in prev_transition and 'vocal_segments' in transition
 
-                # use longer crossfades for larger BPM differences
+                # longer crossfades for larger BPM differences
                 # and when vocal clashes are detected
                 bpm_ratio = max(prev_bpm, current_bpm) / min(prev_bpm, current_bpm)
 
@@ -377,7 +376,7 @@ def create_robust_mix(transitions, output_path, min_crossfade=8.0):
                 current_segment = y_current_adjusted[:int(crossfade_duration * sr)]
 
                 if prev_crossfade_start >= exit_sample:
-                    print(f"Not enough audio for crossfade in previous track")
+                    print(f"Track too short for crossfade")
                     # Just use what we have
                     prev_segment = y_prev[max(0, exit_sample - int(sr_prev)):exit_sample]
                 else:
@@ -484,7 +483,7 @@ def create_robust_mix(transitions, output_path, min_crossfade=8.0):
 
     # Final safety check - ensure there is audio
     if len(mix) == 0:
-        print("❌ ERROR: Mix is empty! Using last valid track as fallback.")
+        print("❌ ERROR: Mix is empty! Last valid track as fallback.")
         if last_audio_segment is not None:
             mix = last_audio_segment
         else:
@@ -494,7 +493,6 @@ def create_robust_mix(transitions, output_path, min_crossfade=8.0):
     silent_frames = np.where(rms_values < 0.001)[0]
 
     if len(silent_frames) > 0:
-        # Check if there are long stretches of silence (more than 2 seconds)
         if len(silent_frames) > 0:
             silent_groups = []
             current_group = [silent_frames[0]]

@@ -108,7 +108,7 @@ class SectionAnalyzer:
                     })
                 section_start = candidates[i]
 
-        # Don't forget the last section
+        # last section
         if len(candidates) > 0:
             section_length = time_axis[-1] if len(candidates) == len(time_axis) else time_axis[candidates[-1]] - \
                                                                                      time_axis[section_start]
@@ -122,7 +122,6 @@ class SectionAnalyzer:
         return sections
 
     def visualize_sections(self, sections, audio_path=None):
-        # Create figure
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10))
 
         if audio_path:
@@ -139,7 +138,7 @@ class SectionAnalyzer:
         ax2.set_xlim(0, sections['outro']['end'])
         ax2.set_ylim(0, 1)
 
-        # Color-code each section type
+        # color code for each section (intro, buildup etc.)
         intro = sections['intro']
         ax2.axvspan(intro['start'], intro['end'], alpha=0.2, color='green', label='Intro')
 

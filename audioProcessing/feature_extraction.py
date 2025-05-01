@@ -188,7 +188,7 @@ class FeatureExtractor:
         }
 
         # Calculate brightness (ratio of high-frequency to total energy)
-        brightness_freq = 2000  # Threshold in Hz
+        brightness_freq = 2000
         brightness_bin = int(brightness_freq * S.shape[0] / (sr / 2))
         brightness = np.sum(S[brightness_bin:, :]) / np.sum(S) if np.sum(S) > 0 else 0
 
@@ -212,16 +212,16 @@ class FeatureExtractor:
 
     def extract_energy_features(self, y, sr):
         """Extract energy-related features for track intensity analysis."""
-        # Compute RMS energy
+        # RMS energy
         rms = librosa.feature.rms(y=y, hop_length=self.hop_length)[0]
 
-        # Compute energy over time
+        # Computing energy over time
         energy = np.sum(np.abs(librosa.stft(y, hop_length=self.hop_length)) ** 2, axis=0)
 
-        # Compute low/mid/high frequency band energies
+        # Compute low/mid/high freq band energies
         S = np.abs(librosa.stft(y, hop_length=self.hop_length))
 
-        # Define frequency bands
+        # Defining frequency bands
         n_fft = 2 * (S.shape[0] - 1)
         freqs = librosa.fft_frequencies(sr=sr, n_fft=n_fft)
 
@@ -291,8 +291,7 @@ class FeatureExtractor:
         }
 
     def extract_structural_features(self, y, sr):
-        """Extract features related to track structure and segmentation."""
-        # Compute MFCC features for segmentation (
+        # Compute MFCC features for segmentation ( speech recgonition)
         mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, hop_length=self.hop_length)
 
         chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=self.hop_length)
@@ -345,10 +344,9 @@ class FeatureExtractor:
     def extract_tonal_features(self, y, sr):
         y_harm = harmonic(y)
 
-        # Compute chromagram
+        # Compute chroma (detech pitch profiles)
         chroma = librosa.feature.chroma_cqt(y=y_harm, sr=sr)
 
-        # Estimate key using chroma
         chroma_avg = np.mean(chroma, axis=1)
         key_index = np.argmax(chroma_avg)
 
@@ -359,14 +357,12 @@ class FeatureExtractor:
         major_profile = np.array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1]) / 7.0
         minor_profile = np.array([1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0]) / 7.0
 
-        # Rotate profiles to match current key
         maj_corr = np.corrcoef(chroma_avg, np.roll(major_profile, key_index))[0, 1]
         min_corr = np.corrcoef(chroma_avg, np.roll(minor_profile, key_index))[0, 1]
 
         mode = 'major' if maj_corr >= min_corr else 'minor'
         key = f"{key_note} {mode}"
 
-        # Key certainty (correlation with best matching profile)
         key_certainty = max(maj_corr, min_corr)
 
         # Calculate key strength for all keys

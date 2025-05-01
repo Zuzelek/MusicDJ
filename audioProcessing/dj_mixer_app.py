@@ -373,9 +373,9 @@ class DJMixerApp:
             # Prefer tracks in common BPM ranges
             bpm = analysis['bpm']
             bpm_score = 1.0
-            if 120 <= bpm <= 130:  # Ideal house range
+            if 120 <= bpm <= 130:
                 bpm_score = 1.2
-            elif 170 <= bpm <= 180:  # DnB range
+            elif 170 <= bpm <= 180:
                 bpm_score = 1.1
 
             first_track_scores[track] = intro_score * bpm_score
@@ -384,7 +384,7 @@ class DJMixerApp:
         current_track = max(first_track_scores, key=first_track_scores.get)
         remaining_tracks = [t for t in track_names if t != current_track]
 
-        # Build the mix sequence
+        # Buildilding mix sequence
         mix_sequence = [{
             'track': current_track,
             'path': self.analyzed_tracks[current_track]['path'],
@@ -393,42 +393,38 @@ class DJMixerApp:
             'next_entry_point': None
         }]
 
-        # Find best next track for each position
+        # finding next best track
         while remaining_tracks:
             best_score = -1
             best_next_track = None
             best_transition = None
 
             for next_track in remaining_tracks:
-                # Get analysis results
                 current_analysis = self.analyzed_tracks[current_track]['analysis']
                 next_analysis = self.analyzed_tracks[next_track]['analysis']
 
-                # Find optimal transition
                 transition = self.transition_detector.find_optimal_transition(current_analysis, next_analysis)
 
                 # Check for vocal clash
-                vocal_compatibility = 1.0  # Default good compatibility
+                vocal_compatibility = 1.0
                 if 'component_scores' in transition and 'vocal' in transition['component_scores']:
                     vocal_compatibility = transition['component_scores']['vocal']
 
                 # Adjust score based on vocal compatibility
                 adjusted_score = transition['score']
-                if vocal_compatibility < 0.7:  # Significant vocal clash
-                    adjusted_score *= 0.8  # Reduce score
+                if vocal_compatibility < 0.7:
+                    adjusted_score *= 0.8  # reduced score if theres vocal clash
 
                 if adjusted_score > best_score:
                     best_score = adjusted_score
                     best_next_track = next_track
                     best_transition = transition
 
-            # Update the mix sequence
             mix_sequence[-1]['exit_point'] = best_transition['exit_point']['time']
             mix_sequence[-1]['next_track'] = best_next_track
             mix_sequence[-1]['next_entry_point'] = best_transition['entry_point']['time']
             mix_sequence[-1]['crossfade_duration'] = best_transition.get('recommended_crossfade', 12.0)
 
-            # Check for vocal clashes to display warning
             has_vocal_clash = False
             if 'component_scores' in best_transition and 'vocal' in best_transition['component_scores']:
                 has_vocal_clash = best_transition['component_scores']['vocal'] < 0.7
@@ -537,8 +533,8 @@ class DJMixerApp:
 
             self.mix_sequence_text.insert(tk.END, f"{track_info_str}\n\n")
 
-        self.mix_sequence_text.insert(tk.END, "Analyzing vocals for enhanced transitions...\n")
-        self.status_var.set("Analyzing vocals...")
+        self.mix_sequence_text.insert(tk.END, "Exporting Mix...\n")
+        self.status_var.set("Exporting Mix...")
         self.root.update()
 
         try:
